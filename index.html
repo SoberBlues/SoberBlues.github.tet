@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>喜宴座位查詢</title>
+<style>
+  body {
+  margin: 0;
+  padding: 20px;
+  background: linear-gradient(rgba(255,255,255,0.7), rgba(255,255,255,0.7)),
+              url('bg.jpg');
+  background-size: cover;
+  background-position: center;
+}
+  h1,h2,h3 { margin: 0; }
+  .container { max-width: 900px; margin: auto; }
+  .search-box { display: flex; gap:10px; margin-bottom:20px; }
+  .search-box input { flex:1; padding: 12px; font-size:18px; border-radius: 12px; border:2px solid #ccc; }
+  .search-box button { padding: 12px 20px; font-size:18px; border:none; border-radius:12px; background: linear-gradient(to right,#f43f5e,#8b5cf6); color:#fff; cursor:pointer;}
+  .card { background:white; border-radius:20px; padding:20px; margin-bottom:20px; box-shadow:0 5px 15px rgba(0,0,0,0.1);}
+  .guest-list { max-height:300px; overflow-y:auto; }
+  .guest-item { padding:10px; border-radius:12px; margin-bottom:8px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center;}
+  .guest-item:hover { background: #ffe4f0; }
+  .badge { padding: 4px 12px; border-radius:999px; color:white; font-weight:bold; }
+  .badge.main { background:#f43f5e; }
+  .badge.vip { background:#8b5cf6; }
+  .badge.normal { background:#3b82f6; }
+  .seating { display:flex; flex-direction:column; align-items:center; margin-top:20px; }
+  .row { display:flex; gap:6px; margin-bottom:6px; }
+  .table { width:50px; height:50px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #ccc; background:white; font-weight:bold; transition:0.3s; }
+  .table.main { background:#f43f5e; color:white; border:none; }
+  .table.vip { background:#8b5cf6; color:white; border:none; }
+  .table.highlight { box-shadow:0 0 10px #3b82f6; transform:scale(1.1); border:none; }
+  .legend { display:flex; gap:15px; flex-wrap:wrap; margin-top:15px; }
+  .legend-item { display:flex; align-items:center; gap:5px; }
+  .legend-circle { width:24px; height:24px; border-radius:50%; display:inline-block; }
+  .note { background:#fef3c7; padding:10px; border-radius:12px; border:1px solid #fde68a; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1 style="text-align:center; margin-bottom:10px;">🧧 尾牙座位查詢</h1>
+  <p style="text-align:center; margin-bottom:20px;">請輸入您的姓名查詢座位資訊</p>
+
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="請輸入姓名..." />
+    <button onclick="searchGuest()">查詢</button>
+  </div>
+
+  <div id="resultContainer"></div>
+
+  <div class="card">
+    <h3 style="text-align:center; margin-bottom:10px;">🗺️ 宴會廳座位圖</h3>
+    <div class="seating" id="seatingLayout"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-circle" style="background:#f43f5e;"></div>主桌</div>
+      <div class="legend-item"><div class="legend-circle" style="background:#8b5cf6;"></div>貴賓桌</div>
+      <div class="legend-item"><div class="legend-circle" style="background:white; border:2px solid #ccc;"></div>一般桌次</div>
+      <div class="legend-item"><div class="legend-circle" style="background:#3b82f6;"></div>您的座位</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let guests = [];
+const seatingLayoutData = [
+  [null,'貴賓A',null,'主桌',null,'貴賓B',null],
+  ['01','02','03',null,'04','05','06'],
+  ['07','08','09',null,'10','11','12'],
+  ['13','14','15',null,'16','17','18'],
+  ['19','20','21',null,'22','23','24'],
+  ['25','26','27',null,'28','29','30'],
+  ['31','32','33',null,'34','35','36'],
+  ['37','38','39',null,'40','41','42'],
+  ['43','44','45',null,'46','47','48'],
+  ['49','50','51',null,'52','53','54']
+];
+
+// 🔹 自動讀取 CSV 檔案
+async function loadGuestData() {
+  try {
+    const response = await fetch('quests.csv'); // CSV 檔放在同一資料夾
+    if (!response.ok) throw new Error('無法讀取 CSV 檔');
+    const csvText = await response.text();
+    guests = csvText.trim().split('\n').slice(1).map(line => {
+      const [name, table, count, note] = line.split(',');
+      return { name:name.trim(), table:table.trim(), count:parseInt(count)||1, note:note?note.trim():'' };
+    });
+    console.log('賓客資料載入完成', guests);
+  } catch (err) {
+    console.error('讀取 CSV 錯誤:', err);
+  }
+}
+
+// 呼叫 CSV 載入
+loadGuestData();
+
+function searchGuest(){
+  const query = document.getElementById('searchInput').value.trim().toLowerCase();
+  const container = document.getElementById('resultContainer');
+  container.innerHTML = '';
+
+  if(!query) return;
+
+  const results = guests.filter(g => g.name.toLowerCase().includes(query));
+
+  if(results.length === 0){
+    container.innerHTML = `<div class="card" style="text-align:center;">
+      <div style="font-size:50px;">😢</div>
+      <p style="font-size:24px;">找不到您的座位資料</p>
+      <p>請洽詢現場新人的招待人員協助入座</p>
+    </div>`;
+  } else if(results.length === 1){
+    const g = results[0];
+    container.innerHTML = `<div class="card">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <div style="font-size:32px;">👤</div>
+        <div>
+          <div style="color:#555;">賓客姓名</div>
+          <div style="font-size:24px; font-weight:bold;">${g.name}</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <div style="font-size:32px;">📍</div>
+        <div>
+          <div style="color:#555;">座位桌次</div>
+          <div style="margin-top:4px;">
+            <span class="badge ${g.table==='主桌'?'main':g.table.includes('貴賓')?'vip':'normal'}">${g.table}</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <div style="font-size:32px;">👥</div>
+        <div>
+          <div style="color:#555;">座位人數</div>
+          <div style="font-size:24px; font-weight:bold;">${g.count} 位</div>
+        </div>
+      </div>
+      ${g.note?`<div class="note">備註: ${g.note}</div>`:''}
+    </div>`;
+  } else {
+    container.innerHTML = `<div class="card">
+      <h2 style="text-align:center;">找到 ${results.length} 位賓客</h2>
+      <div class="guest-list">
+        ${results.map(g => `<div class="guest-item" onclick="showGuest('${g.name}')">
+          <span>${g.name}</span> 
+          <span class="badge ${g.table==='主桌'?'main':g.table.includes('貴賓')?'vip':'normal'}">${g.table}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  highlightTables(results.map(r=>r.table));
+}
+
+function showGuest(name){
+  document.getElementById('searchInput').value = name;
+  searchGuest();
+}
+
+function highlightTables(tables){
+  const seatingDiv = document.getElementById('seatingLayout');
+  seatingDiv.innerHTML = '';
+  seatingLayoutData.forEach(row=>{
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'row';
+    row.forEach(t=>{
+      const div = document.createElement('div');
+      div.className = 'table';
+      if(t==='主桌') div.classList.add('main');
+      else if(t==='貴賓A'||t==='貴賓B') div.classList.add('vip');
+      if(tables.includes(t)) div.classList.add('highlight');
+      if(t) div.textContent = t;
+      rowDiv.appendChild(div);
+    });
+    seatingDiv.appendChild(rowDiv);
+  });
+}
+
+// 初始化座位圖
+highlightTables([]);
+</script>
+</body>
+</html>
